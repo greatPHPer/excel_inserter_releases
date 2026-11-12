@@ -3,7 +3,7 @@ name: Publish Excel Inserter Release
 on:
   push:
     paths:
-      - ".release-now"
+      - "README.md"
   workflow_dispatch:
     inputs:
       release_tag:
