@@ -1,0 +1,88 @@
+name: Publish Excel Inserter Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Unique release tag, for example v1.0.0"
+        required: true
+        default: "v1.0.0"
+        type: string
+      source_run_id:
+        description: "Optional successful run ID from greatPHPer/excel_inserter (blank = latest successful main build)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download the private Windows build artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
+          REQUESTED_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::Repository secret SOURCE_REPO_READ_TOKEN is missing. See the README for one-time setup."
+            exit 1
+          fi
+
+          RUN_ID="$REQUESTED_RUN_ID"
+          if [[ -z "$RUN_ID" ]]; then
+            RUN_ID="$(gh api "repos/greatPHPer/excel_inserter/actions/runs?branch=main&status=success&per_page=1" --jq '.workflow_runs[0].id // empty')"
+          fi
+
+          if [[ ! "$RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not find a successful source build. Supply a valid source_run_id."
+            exit 1
+          fi
+
+          echo "Downloading ExcelInserter-win-x64 from source run $RUN_ID"
+          mkdir -p dist
+          gh run download "$RUN_ID" --repo greatPHPer/excel_inserter --name ExcelInserter-win-x64 --dir dist
+
+          if [[ ! -s dist/ExcelInserter.exe ]]; then
+            echo "::error::The downloaded artifact does not contain ExcelInserter.exe at its root."
+            find dist -maxdepth 3 -type f -print
+            exit 1
+          fi
+
+          (
+            cd dist
+            sha256sum ExcelInserter.exe > SHA256SUMS.txt
+            zip -q -j ExcelInserter-win-x64.zip ExcelInserter.exe SHA256SUMS.txt
+          )
+
+          echo "SOURCE_RUN_ID=$RUN_ID" >> "$GITHUB_ENV"
+          echo "SOURCE_RUN_URL=https://github.com/greatPHPer/excel_inserter/actions/runs/$RUN_ID" >> "$GITHUB_ENV"
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$RELEASE_TAG" =~ ^v?[0-9][0-9A-Za-z._-]*$ ]]; then
+            echo "::error::Invalid release tag. Use a version-like tag such as v1.0.0."
+            exit 1
+          fi
+
+          NOTES="$(printf 'Self-contained Windows x64 release of Excel Inserter.\n\nBuilt from the private source repository using [GitHub Actions run #%s](%s).\n\nThe ZIP contains the executable and its SHA-256 checksum.\n' "$SOURCE_RUN_ID" "$SOURCE_RUN_URL")"
+
+          gh release create "$RELEASE_TAG" \
+            dist/ExcelInserter.exe \
+            dist/ExcelInserter-win-x64.zip \
+            dist/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Excel Inserter $RELEASE_TAG" \
+            --notes "$NOTES"
