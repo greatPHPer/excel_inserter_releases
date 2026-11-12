@@ -1,6 +1,9 @@
 name: Publish Excel Inserter Release
 
 on:
+  push:
+    paths:
+      - ".release-now"
   workflow_dispatch:
     inputs:
       release_tag:
@@ -25,7 +28,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.SOURCE_REPO_READ_TOKEN }}
-          REQUESTED_RUN_ID: ${{ inputs.source_run_id }}
+          REQUESTED_RUN_ID: ${{ github.event_name == 'workflow_dispatch' && inputs.source_run_id || '' }}
         run: |
           set -euo pipefail
 
@@ -67,7 +70,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || 'v1.0.0' }}
         run: |
           set -euo pipefail
 
