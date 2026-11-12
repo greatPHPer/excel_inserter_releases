@@ -35,5 +35,3 @@ The workflow downloads the `ExcelInserter-win-x64` artifact, creates the ZIP and
 
 The latest successful source build is [workflow run #47](https://github.com/greatPHPer/excel_inserter/actions/runs/42557608705). Its temporary Actions artifact expires on **November 23, 2026**; publish it before then, or use a newer successful build.
 
-
-<!-- Release publishing trigger: configured for v1.0.0 -->
